@@ -8,25 +8,22 @@ import shutil
 import argparse
 
 """
-Creates a brighter video using ffmpeg. Requires ffmpeg and opencv 3x. 
+Creates a enhanced video using ffmpeg. Requires ffmpeg and opencv 3x. 
 Supports mp4 and avi formats.
-Usage: $python brighter.py -i video.mp4 -o newvideo.mp4 --brightness 2
+Usage: $python brighter.py -i video.mp4 -o newvideo.mp4
 """
 
-parser = argparse.ArgumentParser(description='Brighter.py', version='0.1')
+parser = argparse.ArgumentParser(description='video-enhancer.py', version='0.1')
 
-parser.add_argument('-i', '--input', dest='input_name', type=str, required=True, 
-                    help="Path, name and filetype of video to make brighter")
+parser.add_argument('-i', '--input', dest='input_name', type=str, required=True,
+                    help="Path, name and filetype of video to enhance")
 parser.add_argument('-o', '--output', dest='output_name', type=str, 
-                    default='brighter.avi', 
+                    default='enhanced.avi',
                     help="Path, name and filetype of output file")
-parser.add_argument('-b', '--brightness', dest='brightness', type=str, default=3, 
-                    help="A number from 1-9 where 1 is the current brightness")
 
 parsed = parser.parse_args()
 input_name = parsed.input_name
 output_name = parsed.output_name
-brightness = parsed.brightness
 
 if input_name.endswith('mp4') or input_name.endswith('avi'):
     video = input_name
@@ -70,8 +67,7 @@ def load_video(video):
     fps = cap.get(cv2.CAP_PROP_FPS)
     return cap, fps
 
-
-def frames_to_png(cap, brightness):
+def frames_to_png(cap):
     f = 0
     while(cap.isOpened()):
         ret, frame = cap.read()
@@ -82,12 +78,22 @@ def frames_to_png(cap, brightness):
             frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
 
-            # Enhance brightness
-            img = ImageEnhance.Brightness(img)
-            img = img.enhance(int(brightness))
-            print img
+            # First crop the image
+            #Boundary coordinates need to be determined after body detection
+            cropped_image = img.crop((30,30,180,180))
+
+            # Convert back to bgr numpy array
+            frame = cv2.cvtColor(np.array(cropped_image), cv2.COLOR_RGB2BGR)
+
+            # Convert cv2 image to rgb and load from numpy array
+            frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+            crop_img = Image.fromarray(frame)
+
+            # Resize the image to original shape
+            resized = cv2.resize(np.array(crop_img), img.size, interpolation = cv2.INTER_AREA)
+
             # Convert back to bgr numpy array and write to disk
-            frame = cv2.cvtColor(np.array(img)[30:210,40:280,:], cv2.COLOR_RGB2BGR)
+            frame = cv2.cvtColor(np.array(resized) , cv2.COLOR_RGB2BGR)
             cv2.imwrite('./temp/frame{}.png'.format(str(f)),frame)
         else:
             break
@@ -159,7 +165,7 @@ def main():
     create_tempdir()
     extract_audio(video)
     stream, framerate = load_video(video)
-    frames_to_png(stream, brightness)
+    frames_to_png(stream)
     png_to_mp4(framerate)
     make_avi()
     if output_name.endswith('mp4'):
