@@ -6,6 +6,8 @@ import os
 import sys
 import shutil
 import argparse
+import imutils
+from imutils.object_detection import non_max_suppression
 
 """
 Creates a enhanced video using ffmpeg. Requires ffmpeg and opencv 3x. 
@@ -69,18 +71,52 @@ def load_video(video):
 
 def frames_to_png(cap):
     f = 0
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    prev_dim = (0, 0, 320, 240)
     while(cap.isOpened()):
         ret, frame = cap.read()
         if ret==True:
             f += 1
-
+            frame = imutils.resize(frame, width=min(400, frame.shape[1]))
             # Convert cv2 image to rgb and load from numpy array
             frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
+            #orig = frame.copy()
 
-            # First crop the image
+            # detect people in the image
+            (rects, weights) = hog.detectMultiScale(frame, winStride=(4, 4),
+                                   padding=(8, 8), scale=1.05)
+            print type(rects)
+            print len(rects)
+            print type(weights)
+
+            # Crop the image
             #Boundary coordinates need to be determined after body detection
-            cropped_image = img.crop((30,30,180,180))
+            if len(rects) == 0:
+                cropped_image = img.crop(prev_dim)
+            else:
+                print rects
+                print tuple(rects[0])
+                dim = tuple(rects[0])
+                if dim[0] == dim[2] or dim[1] == dim [3]:
+                    cropped_image = img.crop(prev_dim)
+                    print prev_dim
+                else:
+                    if dim[0] > dim [2] and dim[1] > dim[3]:
+                       mod_dim = (dim[2], dim[3], dim[0], dim[1])
+                    elif dim[0] > dim[2]:
+                       mod_dim = (dim[2], dim[1], dim[0], dim[3])
+                    elif dim[1] > dim[3]:
+                       mod_dim = (dim[0], dim[3], dim[2], dim[1])
+                       cropped_image = img.crop(mod_dim)
+                       print mod_dim
+                       prev_dim = mod_dim
+                    else:
+                       cropped_image = img.crop(dim)
+                       print dim
+                       prev_dim = dim
+            print cropped_image
 
             # Convert back to bgr numpy array
             frame = cv2.cvtColor(np.array(cropped_image), cv2.COLOR_RGB2BGR)
